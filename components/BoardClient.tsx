@@ -19,6 +19,7 @@ export default function BoardClient({ slug }: { slug: string }) {
   const [newUrl, setNewUrl] = useState("");
   const [addMsg, setAddMsg] = useState("");
   const [adding, setAdding] = useState(false);
+  const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
   const touchX = useRef<number | null>(null);
 
   // Split pasted text into URLs — one per line, space-separated, or jammed together.
@@ -58,9 +59,16 @@ export default function BoardClient({ slug }: { slug: string }) {
   useEffect(() => { loadBoard(); }, [loadBoard]);
 
   // Keyboard shortcuts: ← / X = reject, → = like, ⌘Z / Ctrl+Z = undo
+  // (when the lightbox is open, ←/→ navigate it and Esc closes it instead)
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
       const k = e.key.toLowerCase();
+      if (lightboxIdx !== null) {
+        if (e.key === "Escape") setLightboxIdx(null);
+        if (e.key === "ArrowLeft") setLightboxIdx((i) => (i !== null && i > 0 ? i - 1 : i));
+        if (e.key === "ArrowRight") setLightboxIdx((i) => (i !== null && i < liked.length - 1 ? i + 1 : i));
+        return;
+      }
       if ((e.metaKey || e.ctrlKey) && k === "z") { e.preventDefault(); void undo(); return; }
       if (e.key === "ArrowRight") void swipe(true);
       if (e.key === "ArrowLeft" || k === "x") void swipe(false);
@@ -236,14 +244,27 @@ export default function BoardClient({ slug }: { slug: string }) {
       <div className="moodboard">
         <h2>Mood Board ({liked.length})</h2>
         <div className="moodboard-grid">
-          {liked.map((im) => (
-            <div key={im.id} className="moodboard-item" style={{ backgroundImage: `url(${proxied(im.url)})` }}>
-              <button onClick={() => removeLike(im.id)} title="remove">✕</button>
+          {liked.map((im, idx) => (
+            <div key={im.id} className="moodboard-item clickable" onClick={() => setLightboxIdx(idx)} style={{ backgroundImage: `url(${proxied(im.url)})` }}>
+              <button onClick={(e) => { e.stopPropagation(); removeLike(im.id); }} title="remove">✕</button>
             </div>
           ))}
         </div>
         {liked.length === 0 && <p style={{ color: "#888" }}>Nothing liked yet — hit 💖 on looks you love.</p>}
       </div>
+      {lightboxIdx !== null && liked[lightboxIdx] && (
+        <div className="lightbox" onClick={() => setLightboxIdx(null)}>
+          <button className="lightbox-close" onClick={() => setLightboxIdx(null)} aria-label="close">✕</button>
+          {lightboxIdx > 0 && (
+            <button className="lightbox-nav left" onClick={(e) => { e.stopPropagation(); setLightboxIdx(lightboxIdx - 1); }} aria-label="previous">‹</button>
+          )}
+          <img className="lightbox-img" src={proxied(liked[lightboxIdx].url)} alt="liked look" onClick={(e) => e.stopPropagation()} />
+          {lightboxIdx < liked.length - 1 && (
+            <button className="lightbox-nav right" onClick={(e) => { e.stopPropagation(); setLightboxIdx(lightboxIdx + 1); }} aria-label="next">›</button>
+          )}
+          <div className="lightbox-count" onClick={(e) => e.stopPropagation()}>{lightboxIdx + 1} / {liked.length}</div>
+        </div>
+      )}
     </main>
   );
 }
