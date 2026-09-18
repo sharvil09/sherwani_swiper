@@ -16,6 +16,8 @@ export default function BoardClient({ slug }: { slug: string }) {
   const [anim, setAnim] = useState("");
   const [imgReady, setImgReady] = useState(false);
   const [history, setHistory] = useState<{ img: Img; decision: "liked" | "passed" | "skipped" }[]>([]);
+  const [newUrl, setNewUrl] = useState("");
+  const [addMsg, setAddMsg] = useState("");
   const touchX = useRef<number | null>(null);
 
   const loadBoard = useCallback(async () => {
@@ -68,6 +70,23 @@ export default function BoardClient({ slug }: { slug: string }) {
       setAnim("");
       setStatus("Swipe!");
     }, 220);
+  }
+
+  async function addImage(e: React.FormEvent) {
+    e.preventDefault();
+    const raw = newUrl.trim();
+    if (!raw) return;
+    if (!/^https?:\/\/.+\..+/.test(raw)) { setAddMsg("Paste a full image URL starting with http(s)."); return; }
+    setAddMsg("Adding…");
+    const url = proxied(raw);
+    const { error: upErr } = await supabase.from("images").upsert({ url }, { onConflict: "url", ignoreDuplicates: true });
+    if (upErr) { setAddMsg(upErr.message); return; }
+    const { data, error: selErr } = await supabase.from("images").select("id,url").eq("url", url).single();
+    if (selErr || !data) { setAddMsg(selErr?.message ?? "Couldn't fetch new image."); return; }
+    setQueue((q) => (q.some((im) => im.id === data.id) ? q : [data, ...q]));
+    setCounts((c) => ({ ...c, remaining: c.remaining + (queue.some((im) => im.id === data.id) ? 0 : 1) }));
+    setNewUrl("");
+    setAddMsg("Added — it's next in your queue.");
   }
 
   async function undo() {
@@ -163,6 +182,16 @@ export default function BoardClient({ slug }: { slug: string }) {
         Keys: ← or X = reject · → = like · ⌘Z = undo{" "}
         <button onClick={() => undo()} style={{ background: "none", border: "1px solid #444", color: "#D4AF37", borderRadius: 6, cursor: "pointer", fontSize: 12, padding: "2px 10px" }}>↩ Undo</button>
       </p>
+      <form onSubmit={addImage} style={{ display: "flex", gap: 8, width: "100%", maxWidth: 420, margin: "8px 0" }}>
+        <input
+          value={newUrl}
+          onChange={(e) => setNewUrl(e.target.value)}
+          placeholder="Paste image URL to add to this board…"
+          style={{ flex: 1, padding: "10px 12px", borderRadius: 8, border: "1px solid #333", background: "#1e1e1e", color: "#fff" }}
+        />
+        <button type="submit" style={{ padding: "10px 16px", borderRadius: 8, border: "none", background: "#D4AF37", color: "#111", fontWeight: "bold", cursor: "pointer" }}>Add</button>
+      </form>
+      {addMsg && <p style={{ color: "#888", fontSize: 12, margin: "0 0 8px" }}>{addMsg}</p>}
       <div className="debug">{imgReady ? status : "Loading image…" + " "}<a href="#" onClick={(e) => { e.preventDefault(); skip(); }} style={{ color: "#D4AF37" }}>Skip →</a></div>
       <div className="moodboard">
         <h2>Mood Board ({liked.length})</h2>
