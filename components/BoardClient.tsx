@@ -200,7 +200,7 @@ export default function BoardClient({ slug }: { slug: string }) {
   return (
     <main className="container">
       <h1>{boardTitle}</h1>
-      <p className="progress">/{slug} · 💖 {counts.liked} · ✖ {counts.passed} · left {counts.remaining} · <a href="/">all boards</a> · <a href="#" onClick={(e) => { e.preventDefault(); resetBoard(); }} style={{ color: "#888" }}>reset</a></p>
+      <p className="progress">/{slug} · 💖 {counts.liked} · ✖ {counts.passed} · left {counts.remaining} · <a href="/">all boards</a> · <a href={`/board/${slug}/profile`}>style profile for reviewers →</a> · <a href="#" onClick={(e) => { e.preventDefault(); resetBoard(); }} style={{ color: "#888" }}>reset</a></p>
       <div
         className="card-stack"
         onTouchStart={(e) => { touchX.current = e.touches[0].clientX; }}
