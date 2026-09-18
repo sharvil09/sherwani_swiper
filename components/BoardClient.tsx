@@ -103,6 +103,14 @@ export default function BoardClient({ slug }: { slug: string }) {
     setAddMsg("Added — it's next in this board's queue, and only this board.");
   }
 
+  async function resetBoard() {
+    if (!boardId) return;
+    if (!window.confirm("Reset this board? All likes and passes will be cleared so every photo comes back.")) return;
+    const { error } = await supabase.from("votes").delete().eq("board_id", boardId);
+    if (error) { setStatus(error.message); return; }
+    window.location.reload();
+  }
+
   async function undo() {
     const last = history[history.length - 1];
     if (!last || !boardId) { setStatus("Nothing to undo."); return; }
@@ -167,7 +175,7 @@ export default function BoardClient({ slug }: { slug: string }) {
   return (
     <main className="container">
       <h1>{boardTitle}</h1>
-      <p className="progress">/{slug} · 💖 {counts.liked} · ✖ {counts.passed} · left {counts.remaining} · <a href="/">all boards</a></p>
+      <p className="progress">/{slug} · 💖 {counts.liked} · ✖ {counts.passed} · left {counts.remaining} · <a href="/">all boards</a> · <a href="#" onClick={(e) => { e.preventDefault(); resetBoard(); }} style={{ color: "#888" }}>reset</a></p>
       <div
         className="card-stack"
         onTouchStart={(e) => { touchX.current = e.touches[0].clientX; }}
