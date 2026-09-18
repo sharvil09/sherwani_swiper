@@ -1,4 +1,4 @@
-# Sherwani Picker — hosted web app (Next.js + Supabase, no auth)
+# Indian Wedding Palette Swiper (Next.js + Supabase, no auth)
 
 Swipe sherwani looks, build **named shared boards** like `/board/sunday`. No login.
 

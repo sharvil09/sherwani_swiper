@@ -2,7 +2,7 @@ import "./globals.css";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Shawarma to Sherwani",
+  title: "Indian Wedding Palette Swiper",
   description: "Swipe sherwani looks, build a shared mood board."
 };
 

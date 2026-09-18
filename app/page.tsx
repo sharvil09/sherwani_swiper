@@ -42,7 +42,7 @@ export default function Home() {
 
   return (
     <main className="container">
-      <h1>From Shawarma to Sherwani</h1>
+      <h1>Indian Wedding Palette Swiper</h1>
       <p style={{ color: "#aaa", textAlign: "center", maxWidth: 480 }}>
         Create a named board (e.g. “Sunday fitting”), share the link, and swipe together. Likes land on a shared mood board — no login needed.
       </p>
