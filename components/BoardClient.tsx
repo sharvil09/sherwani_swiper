@@ -38,12 +38,13 @@ export default function BoardClient({ slug }: { slug: string }) {
     setBoardId(board.id);
     setBoardTitle(board.title);
 
+    // Strictly board-scoped: only images linked to THIS board (no shared pool).
     const { data: images, error: iErr } = await supabase
       .from("images")
       .select("id,url")
-      .or(`board_id.is.null,board_id.eq.${board.id}`)
+      .eq("board_id", board.id)
       .order("created_at")
-      .limit(1000);
+      .limit(5000);
     if (iErr) { setStatus(iErr.message); return; }
     const { data: votes } = await supabase.from("votes").select("image_id,decision").eq("board_id", board.id);
     const voted = new Set((votes ?? []).map((v) => v.image_id));
@@ -109,7 +110,7 @@ export default function BoardClient({ slug }: { slug: string }) {
       setAddMsg(`Checking ${Math.min(i + 200, urls.length)} / ${urls.length}…`);
       const { data: existing, error: selErr } = await supabase
         .from("images").select("id,url").in("url", chunk)
-        .or(`board_id.is.null,board_id.eq.${boardId}`);
+        .eq("board_id", boardId);
       if (selErr) { setAddMsg(selErr.message); setAdding(false); return; }
       for (const r of existing ?? []) have.set(r.url, r);
     }
@@ -224,7 +225,11 @@ export default function BoardClient({ slug }: { slug: string }) {
             style={{ backgroundImage: imgReady ? `url(${proxied(current.url)})` : undefined, transform: anim || undefined, opacity: anim ? 0 : 1 }}
           />
         ) : (
-          <div style={{ padding: 40, textAlign: "center" }}>Done! All caught up. 🎉</div>
+          <div style={{ padding: 40, textAlign: "center" }}>
+            {counts.liked === 0 && counts.passed === 0
+              ? "This board is empty — paste photo links in the Add box below to start swiping."
+              : "Done! All caught up. 🎉"}
+          </div>
         )}
       </div>
       <div className="btn-row">
