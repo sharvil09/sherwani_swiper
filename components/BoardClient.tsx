@@ -38,11 +38,12 @@ export default function BoardClient({ slug }: { slug: string }) {
 
   useEffect(() => { loadBoard(); }, [loadBoard]);
 
-  // Keyboard shortcuts
+  // Keyboard shortcuts: ← / X = reject, → = like
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
+      const k = e.key.toLowerCase();
       if (e.key === "ArrowRight") void swipe(true);
-      if (e.key === "ArrowLeft") void swipe(false);
+      if (e.key === "ArrowLeft" || k === "x") void swipe(false);
     };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
@@ -132,6 +133,7 @@ export default function BoardClient({ slug }: { slug: string }) {
         <button className="btn-reject" onClick={() => swipe(false)} aria-label="pass">❌</button>
         <button className="btn-accept" onClick={() => swipe(true)} aria-label="like">💖</button>
       </div>
+      <p style={{ color: "#666", fontSize: 12, margin: "0 0 8px" }}>Keys: ← or X = reject · → = like</p>
       <div className="debug">{imgReady ? status : "Loading image…" + " "}<a href="#" onClick={(e) => { e.preventDefault(); skip(); }} style={{ color: "#D4AF37" }}>Skip →</a></div>
       <div className="moodboard">
         <h2>Mood Board ({liked.length})</h2>
