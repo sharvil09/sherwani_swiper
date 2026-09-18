@@ -15,6 +15,7 @@ export default function BoardClient({ slug }: { slug: string }) {
   const [status, setStatus] = useState("Loading board…");
   const [anim, setAnim] = useState("");
   const [imgReady, setImgReady] = useState(false);
+  const [history, setHistory] = useState<{ img: Img; decision: "liked" | "passed" | "skipped" }[]>([]);
   const touchX = useRef<number | null>(null);
 
   const loadBoard = useCallback(async () => {
@@ -38,10 +39,11 @@ export default function BoardClient({ slug }: { slug: string }) {
 
   useEffect(() => { loadBoard(); }, [loadBoard]);
 
-  // Keyboard shortcuts: ← / X = reject, → = like
+  // Keyboard shortcuts: ← / X = reject, → = like, ⌘Z / Ctrl+Z = undo
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
       const k = e.key.toLowerCase();
+      if ((e.metaKey || e.ctrlKey) && k === "z") { e.preventDefault(); void undo(); return; }
       if (e.key === "ArrowRight") void swipe(true);
       if (e.key === "ArrowLeft" || k === "x") void swipe(false);
     };
@@ -62,9 +64,31 @@ export default function BoardClient({ slug }: { slug: string }) {
       setQueue((q) => q.slice(1));
       if (like) setLiked((l) => [current, ...l]);
       setCounts((c) => ({ liked: c.liked + (like ? 1 : 0), passed: c.passed + (like ? 0 : 1), remaining: Math.max(0, c.remaining - 1) }));
+      setHistory((h) => [...h, { img: current, decision: like ? "liked" : "passed" }]);
       setAnim("");
       setStatus("Swipe!");
     }, 220);
+  }
+
+  async function undo() {
+    const last = history[history.length - 1];
+    if (!last || !boardId) { setStatus("Nothing to undo."); return; }
+    if (last.decision !== "skipped") {
+      const { error } = await supabase.from("votes").delete().eq("board_id", boardId).eq("image_id", last.img.id);
+      if (error) { setStatus(error.message); return; }
+      if (last.decision === "liked") {
+        setLiked((l) => l.filter((im) => im.id !== last.img.id));
+        setCounts((c) => ({ ...c, liked: Math.max(0, c.liked - 1), remaining: c.remaining + 1 }));
+      } else {
+        setCounts((c) => ({ ...c, passed: Math.max(0, c.passed - 1), remaining: c.remaining + 1 }));
+      }
+    } else {
+      setCounts((c) => ({ ...c, remaining: c.remaining + 1 }));
+    }
+    setHistory((h) => h.slice(0, -1));
+    setAnim("");
+    setQueue((q) => [last.img, ...q]);
+    setStatus("Undone.");
   }
 
   async function removeLike(imageId: string) {
@@ -98,10 +122,12 @@ export default function BoardClient({ slug }: { slug: string }) {
   }, [current?.id]);
 
   function skip() {
-    if (!queue[0]) return;
+    const first = queue[0];
+    if (!first) return;
     setAnim("");
     setQueue((q) => q.slice(1));
     setCounts((c) => ({ ...c, remaining: Math.max(0, c.remaining - 1) }));
+    setHistory((h) => [...h, { img: first, decision: "skipped" }]);
     setStatus("Skipped.");
   }
 
@@ -133,7 +159,10 @@ export default function BoardClient({ slug }: { slug: string }) {
         <button className="btn-reject" onClick={() => swipe(false)} aria-label="pass">❌</button>
         <button className="btn-accept" onClick={() => swipe(true)} aria-label="like">💖</button>
       </div>
-      <p style={{ color: "#666", fontSize: 12, margin: "0 0 8px" }}>Keys: ← or X = reject · → = like</p>
+      <p style={{ color: "#666", fontSize: 12, margin: "0 0 8px" }}>
+        Keys: ← or X = reject · → = like · ⌘Z = undo{" "}
+        <button onClick={() => undo()} style={{ background: "none", border: "1px solid #444", color: "#D4AF37", borderRadius: 6, cursor: "pointer", fontSize: 12, padding: "2px 10px" }}>↩ Undo</button>
+      </p>
       <div className="debug">{imgReady ? status : "Loading image…" + " "}<a href="#" onClick={(e) => { e.preventDefault(); skip(); }} style={{ color: "#D4AF37" }}>Skip →</a></div>
       <div className="moodboard">
         <h2>Mood Board ({liked.length})</h2>
