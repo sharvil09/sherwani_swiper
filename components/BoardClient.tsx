@@ -18,7 +18,18 @@ export default function BoardClient({ slug }: { slug: string }) {
   const [history, setHistory] = useState<{ img: Img; decision: "liked" | "passed" | "skipped" }[]>([]);
   const [newUrl, setNewUrl] = useState("");
   const [addMsg, setAddMsg] = useState("");
+  const [adding, setAdding] = useState(false);
   const touchX = useRef<number | null>(null);
+
+  // Split pasted text into URLs — one per line, space-separated, or jammed together.
+  function parseUrls(text: string): string[] {
+    const out: string[] = [];
+    for (const part of text.split(/(?=https?:\/\/)/)) {
+      const token = part.split(/[\s"'<>]+/)[0]?.trim() ?? "";
+      if (/^https?:\/\/.+\..+/.test(token)) out.push(proxied(token));
+    }
+    return [...new Set(out)];
+  }
 
   const loadBoard = useCallback(async () => {
     const { data: board, error: bErr } = await supabase.from("boards").select("id,title").eq("slug", slug).single();
@@ -79,28 +90,34 @@ export default function BoardClient({ slug }: { slug: string }) {
 
   async function addImage(e: React.FormEvent) {
     e.preventDefault();
-    const raw = newUrl.trim();
-    if (!raw) return;
     if (!boardId) { setAddMsg("Board still loading — try again in a second."); return; }
-    if (!/^https?:\/\/.+\..+/.test(raw)) { setAddMsg("Paste a full image URL starting with http(s)."); return; }
-    setAddMsg("Adding…");
-    const url = proxied(raw);
-    // Reuse a global or this-board row if one already exists…
+    const urls = parseUrls(newUrl).slice(0, 200);
+    if (urls.length === 0) { setAddMsg("Paste one or more image URLs (separate with new lines or spaces)."); return; }
+    setAdding(true);
+    setAddMsg(`Adding ${urls.length}…`);
+    // Reuse rows already visible to this board…
     const { data: existing } = await supabase
-      .from("images").select("id,url").eq("url", url)
-      .or(`board_id.is.null,board_id.eq.${boardId}`).maybeSingle();
-    let row = existing;
-    if (!row) {
-      // …otherwise insert a row scoped to THIS board only.
+      .from("images").select("id,url").in("url", urls)
+      .or(`board_id.is.null,board_id.eq.${boardId}`);
+    const have = new Map((existing ?? []).map((r) => [r.url, r]));
+    const missing = urls.filter((u) => !have.has(u));
+    if (missing.length > 0) {
+      // …insert the rest scoped to THIS board only.
       const { data: inserted, error: insErr } = await supabase
-        .from("images").insert({ url, board_id: boardId }).select("id,url").single();
-      if (insErr || !inserted) { setAddMsg(insErr?.message ?? "Couldn't add image."); return; }
-      row = inserted;
+        .from("images").insert(missing.map((url) => ({ url, board_id: boardId }))).select("id,url");
+      if (insErr) { setAddMsg(insErr.message); setAdding(false); return; }
+      for (const r of inserted ?? []) have.set(r.url, r);
     }
-    setQueue((q) => (q.some((im) => im.id === row!.id) ? q : [row!, ...q]));
-    setCounts((c) => ({ ...c, remaining: c.remaining + (queue.some((im) => im.id === row!.id) ? 0 : 1) }));
+    const rows = urls.map((u) => have.get(u)!).filter(Boolean);
+    setQueue((q) => {
+      const ids = new Set(q.map((im) => im.id));
+      const fresh = rows.filter((r) => !ids.has(r.id));
+      setCounts((c) => ({ ...c, remaining: c.remaining + fresh.length }));
+      return [...fresh, ...q];
+    });
     setNewUrl("");
-    setAddMsg("Added — it's next in this board's queue, and only this board.");
+    setAdding(false);
+    setAddMsg(`Added ${rows.length} to this board (${missing.length} new, ${urls.length - missing.length} already here).`);
   }
 
   async function resetBoard() {
@@ -205,13 +222,14 @@ export default function BoardClient({ slug }: { slug: string }) {
         <button onClick={() => undo()} style={{ background: "none", border: "1px solid #444", color: "#D4AF37", borderRadius: 6, cursor: "pointer", fontSize: 12, padding: "2px 10px" }}>↩ Undo</button>
       </p>
       <form onSubmit={addImage} style={{ display: "flex", gap: 8, width: "100%", maxWidth: 420, margin: "8px 0" }}>
-        <input
+        <textarea
           value={newUrl}
           onChange={(e) => setNewUrl(e.target.value)}
-          placeholder="Paste image URL to add to this board…"
-          style={{ flex: 1, padding: "10px 12px", borderRadius: 8, border: "1px solid #333", background: "#1e1e1e", color: "#fff" }}
+          placeholder="Paste image URLs (one per line, or many at once)…"
+          rows={2}
+          style={{ flex: 1, padding: "10px 12px", borderRadius: 8, border: "1px solid #333", background: "#1e1e1e", color: "#fff", resize: "vertical" }}
         />
-        <button type="submit" style={{ padding: "10px 16px", borderRadius: 8, border: "none", background: "#D4AF37", color: "#111", fontWeight: "bold", cursor: "pointer" }}>Add</button>
+        <button type="submit" disabled={adding} style={{ padding: "10px 16px", borderRadius: 8, border: "none", background: "#D4AF37", color: "#111", fontWeight: "bold", cursor: "pointer", alignSelf: "flex-start" }}>{adding ? "…" : "Add"}</button>
       </form>
       {addMsg && <p style={{ color: "#888", fontSize: 12, margin: "0 0 8px" }}>{addMsg}</p>}
       <div className="debug">{imgReady ? status : "Loading image…" + " "}<a href="#" onClick={(e) => { e.preventDefault(); skip(); }} style={{ color: "#D4AF37" }}>Skip →</a></div>
