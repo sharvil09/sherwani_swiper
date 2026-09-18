@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { RAW_PINTEREST_LINKS } from "../lib/images";
+import { RAW_PINTEREST_LINKS, proxied } from "../lib/images";
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const key =
@@ -14,7 +14,7 @@ if (!url || !key) {
 const supabase = createClient(url, key);
 
 async function main() {
-  const unique = [...new Set(RAW_PINTEREST_LINKS)];
+  const unique = [...new Set(RAW_PINTEREST_LINKS.map(proxied))];
   console.log(`Seeding ${unique.length} images...`);
   const rows = unique.map((u) => ({ url: u }));
   // Insert in chunks to avoid payload limits

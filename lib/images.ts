@@ -206,5 +206,9 @@ export const RAW_PINTEREST_LINKS: string[] = [
 ];
 
 export function proxied(rawUrl: string): string {
-  return "https://wsrv.nl/?url=" + rawUrl;
+  // Pinterest 403s /originals/ (and wsrv.nl can't fetch them either).
+  // /736x/ renditions load directly. PNGs have no rendition — returned as-is.
+  if (rawUrl.endsWith(".jpg") || rawUrl.endsWith(".jpeg"))
+    return rawUrl.replace("/originals/", "/736x/");
+  return rawUrl;
 }

@@ -14,6 +14,7 @@ export default function BoardClient({ slug }: { slug: string }) {
   const [counts, setCounts] = useState({ liked: 0, passed: 0, remaining: 0 });
   const [status, setStatus] = useState("Loading board…");
   const [anim, setAnim] = useState("");
+  const [imgReady, setImgReady] = useState(false);
   const touchX = useRef<number | null>(null);
 
   const loadBoard = useCallback(async () => {
@@ -48,7 +49,21 @@ export default function BoardClient({ slug }: { slug: string }) {
   });
 
   async function swipe(like: boolean) {
-    const current = queue[0];
+  const current = queue[0];
+
+  // Preload current image; silently skip it if it fails to load (dead link).
+  useEffect(() => {
+    if (!current) return;
+    setImgReady(false);
+    const img = new Image();
+    img.onload = () => setImgReady(true);
+    img.onerror = () => {
+      setQueue((q) => q.slice(1));
+      setCounts((c) => ({ ...c, remaining: Math.max(0, c.remaining - 1) }));
+      setStatus("Skipped a broken image…");
+    };
+    img.src = proxied(current.url);
+  }, [current?.id]);
     if (!current || !boardId) return;
     setAnim(like ? "translateX(200px) rotate(20deg)" : "translateX(-200px) rotate(-20deg)");
     const { error } = await supabase.from("votes").upsert(
@@ -92,7 +107,7 @@ export default function BoardClient({ slug }: { slug: string }) {
         {current ? (
           <div
             className="swipe-card"
-            style={{ backgroundImage: `url(${proxied(current.url)})`, transform: anim || undefined, opacity: anim ? 0 : 1 }}
+            style={{ backgroundImage: imgReady ? `url(${proxied(current.url)})` : undefined, transform: anim || undefined, opacity: anim ? 0 : 1 }}
           />
         ) : (
           <div style={{ padding: 40, textAlign: "center" }}>Done! All caught up. 🎉</div>
