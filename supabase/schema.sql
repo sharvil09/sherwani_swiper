@@ -37,6 +37,8 @@ drop policy if exists "public read images" on images;
 create policy "public read images" on images for select using (true);
 drop policy if exists "public insert images" on images;
 create policy "public insert images" on images for insert with check (true);
+drop policy if exists "public delete images" on images;
+create policy "public delete images" on images for delete using (true);
 
 drop policy if exists "public read votes" on votes;
 create policy "public read votes" on votes for select using (true);
