@@ -99,20 +99,26 @@ export default function BoardClient({ slug }: { slug: string }) {
   async function addImage(e: React.FormEvent) {
     e.preventDefault();
     if (!boardId) { setAddMsg("Board still loading — try again in a second."); return; }
-    const urls = parseUrls(newUrl).slice(0, 200);
+    const urls = parseUrls(newUrl).slice(0, 2000);
     if (urls.length === 0) { setAddMsg("Paste one or more image URLs (separate with new lines or spaces)."); return; }
     setAdding(true);
-    setAddMsg(`Adding ${urls.length}…`);
-    // Reuse rows already visible to this board…
-    const { data: existing } = await supabase
-      .from("images").select("id,url").in("url", urls)
-      .or(`board_id.is.null,board_id.eq.${boardId}`);
-    const have = new Map((existing ?? []).map((r) => [r.url, r]));
+    // Chunked so giant pastes don't blow URL-length / payload limits.
+    const have = new Map<string, Img>();
+    for (let i = 0; i < urls.length; i += 200) {
+      const chunk = urls.slice(i, i + 200);
+      setAddMsg(`Checking ${Math.min(i + 200, urls.length)} / ${urls.length}…`);
+      const { data: existing, error: selErr } = await supabase
+        .from("images").select("id,url").in("url", chunk)
+        .or(`board_id.is.null,board_id.eq.${boardId}`);
+      if (selErr) { setAddMsg(selErr.message); setAdding(false); return; }
+      for (const r of existing ?? []) have.set(r.url, r);
+    }
     const missing = urls.filter((u) => !have.has(u));
-    if (missing.length > 0) {
-      // …insert the rest scoped to THIS board only.
+    for (let i = 0; i < missing.length; i += 200) {
+      const chunk = missing.slice(i, i + 200);
+      setAddMsg(`Adding ${Math.min(i + 200, missing.length)} / ${missing.length} new…`);
       const { data: inserted, error: insErr } = await supabase
-        .from("images").insert(missing.map((url) => ({ url, board_id: boardId }))).select("id,url");
+        .from("images").insert(chunk.map((url) => ({ url, board_id: boardId }))).select("id,url");
       if (insErr) { setAddMsg(insErr.message); setAdding(false); return; }
       for (const r of inserted ?? []) have.set(r.url, r);
     }
