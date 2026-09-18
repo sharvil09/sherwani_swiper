@@ -212,3 +212,30 @@ export function proxied(rawUrl: string): string {
     return rawUrl.replace("/originals/", "/736x/");
   return rawUrl;
 }
+
+// Params that don't change the photo (tracking + cache-busters) — stripped for dedup.
+const NOISE_PARAMS = new Set([
+  "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content",
+  "fbclid", "gclid", "igshid", "mc_cid", "mc_eid", "v", "version",
+]);
+
+// Canonicalize a URL so trivially-different spellings of the same photo dedupe.
+export function normalizeUrl(raw: string): string {
+  const trimmed = raw.trim();
+  try {
+    const u = new URL(trimmed);
+    u.protocol = "https:";
+    u.hostname = u.hostname.toLowerCase();
+    u.hash = "";
+    const kept: [string, string][] = [];
+    u.searchParams.forEach((value, key) => {
+      if (!NOISE_PARAMS.has(key.toLowerCase())) kept.push([key, value]);
+    });
+    kept.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+    u.search = "";
+    for (const [k, v] of kept) u.searchParams.append(k, v);
+    return u.toString();
+  } catch {
+    return trimmed;
+  }
+}

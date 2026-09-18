@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase";
-import { proxied } from "@/lib/images";
+import { proxied, normalizeUrl } from "@/lib/images";
 
 type Img = { id: string; url: string };
 
@@ -27,7 +27,7 @@ export default function BoardClient({ slug }: { slug: string }) {
     const out: string[] = [];
     for (const part of text.split(/(?=https?:\/\/)/)) {
       const token = part.split(/[\s"'<>]+/)[0]?.trim() ?? "";
-      if (/^https?:\/\/.+\..+/.test(token)) out.push(proxied(token));
+      if (/^https?:\/\/.+\..+/.test(token)) out.push(proxied(normalizeUrl(token)));
     }
     return [...new Set(out)];
   }

@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { RAW_PINTEREST_LINKS, proxied } from "../lib/images";
+import { RAW_PINTEREST_LINKS, proxied, normalizeUrl } from "../lib/images";
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const key =
@@ -14,7 +14,7 @@ if (!url || !key) {
 const supabase = createClient(url, key);
 
 async function main() {
-  const unique = [...new Set(RAW_PINTEREST_LINKS.map(proxied))];
+  const unique = [...new Set(RAW_PINTEREST_LINKS.map((u) => proxied(normalizeUrl(u))))];
   console.log(`Seeding ${unique.length} images...`);
   const { data: existing } = await supabase.from("images").select("url").limit(10000);
   const have = new Set((existing ?? []).map((r) => r.url));
