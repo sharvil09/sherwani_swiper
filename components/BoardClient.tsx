@@ -51,19 +51,33 @@ export default function BoardClient({ slug }: { slug: string }) {
   async function swipe(like: boolean) {
   const current = queue[0];
 
-  // Preload current image; silently skip it if it fails to load (dead link).
+  // Preload current image; silently skip it if it fails or hangs (dead link).
   useEffect(() => {
     if (!current) return;
     setImgReady(false);
-    const img = new Image();
-    img.onload = () => setImgReady(true);
-    img.onerror = () => {
+    let done = false;
+    const fail = () => {
+      if (done) return;
+      done = true;
       setQueue((q) => q.slice(1));
       setCounts((c) => ({ ...c, remaining: Math.max(0, c.remaining - 1) }));
       setStatus("Skipped a broken image…");
     };
+    const img = new Image();
+    img.onload = () => { done = true; setImgReady(true); };
+    img.onerror = fail;
     img.src = proxied(current.url);
+    const t = setTimeout(fail, 15000);
+    return () => clearTimeout(t);
   }, [current?.id]);
+
+  function skip() {
+    if (!queue[0]) return;
+    setAnim("");
+    setQueue((q) => q.slice(1));
+    setCounts((c) => ({ ...c, remaining: Math.max(0, c.remaining - 1) }));
+    setStatus("Skipped.");
+  }
     if (!current || !boardId) return;
     setAnim(like ? "translateX(200px) rotate(20deg)" : "translateX(-200px) rotate(-20deg)");
     const { error } = await supabase.from("votes").upsert(
@@ -117,7 +131,7 @@ export default function BoardClient({ slug }: { slug: string }) {
         <button className="btn-reject" onClick={() => swipe(false)} aria-label="pass">❌</button>
         <button className="btn-accept" onClick={() => swipe(true)} aria-label="like">💖</button>
       </div>
-      <div className="debug">{status}</div>
+      <div className="debug">{imgReady ? status : "Loading image…" + " "}<a href="#" onClick={(e) => { e.preventDefault(); skip(); }} style={{ color: "#D4AF37" }}>Skip →</a></div>
       <div className="moodboard">
         <h2>Mood Board ({liked.length})</h2>
         <div className="moodboard-grid">
