@@ -26,7 +26,12 @@ export default function BoardClient({ slug }: { slug: string }) {
     setBoardId(board.id);
     setBoardTitle(board.title);
 
-    const { data: images, error: iErr } = await supabase.from("images").select("id,url").order("created_at").limit(1000);
+    const { data: images, error: iErr } = await supabase
+      .from("images")
+      .select("id,url")
+      .or(`board_id.is.null,board_id.eq.${board.id}`)
+      .order("created_at")
+      .limit(1000);
     if (iErr) { setStatus(iErr.message); return; }
     const { data: votes } = await supabase.from("votes").select("image_id,decision").eq("board_id", board.id);
     const voted = new Set((votes ?? []).map((v) => v.image_id));
@@ -76,17 +81,26 @@ export default function BoardClient({ slug }: { slug: string }) {
     e.preventDefault();
     const raw = newUrl.trim();
     if (!raw) return;
+    if (!boardId) { setAddMsg("Board still loading — try again in a second."); return; }
     if (!/^https?:\/\/.+\..+/.test(raw)) { setAddMsg("Paste a full image URL starting with http(s)."); return; }
     setAddMsg("Adding…");
     const url = proxied(raw);
-    const { error: upErr } = await supabase.from("images").upsert({ url }, { onConflict: "url", ignoreDuplicates: true });
-    if (upErr) { setAddMsg(upErr.message); return; }
-    const { data, error: selErr } = await supabase.from("images").select("id,url").eq("url", url).single();
-    if (selErr || !data) { setAddMsg(selErr?.message ?? "Couldn't fetch new image."); return; }
-    setQueue((q) => (q.some((im) => im.id === data.id) ? q : [data, ...q]));
-    setCounts((c) => ({ ...c, remaining: c.remaining + (queue.some((im) => im.id === data.id) ? 0 : 1) }));
+    // Reuse a global or this-board row if one already exists…
+    const { data: existing } = await supabase
+      .from("images").select("id,url").eq("url", url)
+      .or(`board_id.is.null,board_id.eq.${boardId}`).maybeSingle();
+    let row = existing;
+    if (!row) {
+      // …otherwise insert a row scoped to THIS board only.
+      const { data: inserted, error: insErr } = await supabase
+        .from("images").insert({ url, board_id: boardId }).select("id,url").single();
+      if (insErr || !inserted) { setAddMsg(insErr?.message ?? "Couldn't add image."); return; }
+      row = inserted;
+    }
+    setQueue((q) => (q.some((im) => im.id === row!.id) ? q : [row!, ...q]));
+    setCounts((c) => ({ ...c, remaining: c.remaining + (queue.some((im) => im.id === row!.id) ? 0 : 1) }));
     setNewUrl("");
-    setAddMsg("Added — it's next in your queue.");
+    setAddMsg("Added — it's next in this board's queue, and only this board.");
   }
 
   async function undo() {

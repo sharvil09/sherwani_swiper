@@ -10,7 +10,9 @@ create table if not exists boards (
 
 create table if not exists images (
   id uuid primary key default gen_random_uuid(),
-  url text unique not null,
+  url text not null,
+  -- NULL = shared pool (every board); set = visible only on that board
+  board_id uuid references boards(id) on delete cascade,
   created_at timestamptz default now()
 );
 
@@ -50,3 +52,9 @@ create policy "public delete votes" on votes for delete using (true);
 -- Helpful indexes
 create index if not exists votes_board_idx on votes(board_id);
 create index if not exists votes_image_idx on votes(image_id);
+create index if not exists images_board_idx on images(board_id);
+
+-- Migration for existing DBs (run once): scope images per board
+-- alter table images add column if not exists board_id uuid references boards(id) on delete cascade;
+-- create index if not exists images_board_idx on images(board_id);
+-- alter table images drop constraint if exists images_url_key;

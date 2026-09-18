@@ -16,14 +16,15 @@ const supabase = createClient(url, key);
 async function main() {
   const unique = [...new Set(RAW_PINTEREST_LINKS.map(proxied))];
   console.log(`Seeding ${unique.length} images...`);
-  const rows = unique.map((u) => ({ url: u }));
+  const { data: existing } = await supabase.from("images").select("url").limit(10000);
+  const have = new Set((existing ?? []).map((r) => r.url));
+  const missing = unique.filter((u) => !have.has(u)).map((u) => ({ url: u }));
+  console.log(`${have.size} already present, ${missing.length} to insert (global pool).`);
   // Insert in chunks to avoid payload limits
   const chunkSize = 100;
-  for (let i = 0; i < rows.length; i += chunkSize) {
-    const chunk = rows.slice(i, i + chunkSize);
-    const { error } = await supabase
-      .from("images")
-      .upsert(chunk, { onConflict: "url", ignoreDuplicates: true });
+  for (let i = 0; i < missing.length; i += chunkSize) {
+    const chunk = missing.slice(i, i + chunkSize);
+    const { error } = await supabase.from("images").insert(chunk);
     if (error) {
       console.error("Seed chunk failed:", error.message);
       process.exit(1);
